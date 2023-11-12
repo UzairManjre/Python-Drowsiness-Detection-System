@@ -1,124 +1,81 @@
-# porperty of Uzair Manjre
+-# porperty of Uzair Manjre
+
 import cv2
+import os
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
-from collections import deque
-from playsound import playsound
-import threading
-
-# Load the trained model
-model = tf.keras.models.load_model('my_model.keras')
-
-# Load the Haar Cascade classifiers for face and eye detection
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
-
-# Define the function to preprocess the input image
-def preprocess_image(img):
-    # Assuming your images have the same dimensions as the training images
-    image_size = (64, 64)
-    img = cv2.resize(img, image_size)
-    img = img / 255.0
-    return np.expand_dims(img, axis=0)
-
-def play_alert_sound():
-    playsound("sounds/beep-warning-6387.mp3")
-
-# Access the camera
-cap = cv2.VideoCapture(0)  # Use 0 for default webcam, change the index if you have multiple cameras
-# cap.set(3, 640)  # Width
-# cap.set(4, 480)  # Height
-# test the fps of the camera feedback
-fps = cap.get(cv2.CAP_PROP_FPS)
-print("Frames per second:", fps)
 
 
+# Function to load images from a folder
+def load_images_from_folder(folder):
+    images = []
+    for filename in os.listdir(folder):
+        img = cv2.imread(os.path.join(folder, filename))
+        if img is not None:
+            images.append(img)
+    return images
+
+# Assuming your folders are in the same directory as your script
+open_eye_images = load_images_from_folder('train/Open_Eyes')
+closed_eye_images = load_images_from_folder('train/Closed_Eyes')
+
+# Assuming your images have the same dimensions, resize them if needed
+image_size = (64, 64)
+open_eye_images = [cv2.resize(img, image_size) for img in open_eye_images]
+closed_eye_images = [cv2.resize(img, image_size) for img in closed_eye_images]
+
+# Create labels for your data (1 for open eyes, 0 for closed eyes)
+open_eye_labels = np.ones(len(open_eye_images))
+closed_eye_labels = np.zeros(len(closed_eye_images))
+
+# Concatenate the data and labels
+X = np.array(open_eye_images + closed_eye_images)
+y = np.concatenate([open_eye_labels, closed_eye_labels])
+
+# Normalize pixel values to be between 0 and 1
+X = X / 255.0
+
+# Shuffle the data
+shuffle_indices = np.random.permutation(len(X))
+X = X[shuffle_indices]
+y = y[shuffle_indices]
+
+# Assuming image_size is the size of your resized images
+input_size = image_size[0] * image_size[1] * 3
+
+# Split the data into training and validation sets
+split = int(0.8 * len(X))
+X_train, X_val = X[:split], X[split:]
+y_train, y_val = y[:split], y[split:]
+
+X_test, y_test = X[split:], y[split:]
+# Create the model
 
 
-# Parameters for mean close eye count
-mean_close_eye_count_threshold = 10  # Adjust as needed
-mean_close_eye_count = deque(maxlen=mean_close_eye_count_threshold)
+model = tf.keras.Sequential([
+    layers.Flatten(input_shape=(image_size[0], image_size[1], 3)),
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.5),
+    layers.Dense(64, activation='relu'),
+    layers.Dropout(0.5),
+    layers.Dense(1, activation='sigmoid')
+])
 
-while True:
-    # Capture frame-by-frame
-    ret, frame = cap.read()
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-    # Convert the frame to grayscale for face detection
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    # Detect faces
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4)
+# Train the model
+model.fit(X_train, y_train, epochs=60, validation_data=(X_val, y_val))
 
 
+# Evaluate the model on the test set
+test_loss, test_accuracy = model.evaluate(X_test, y_test)
+print(f'Test Accuracy: {test_accuracy * 100:.2f}%')
 
-    for (x, y, w, h) in faces:
-        # Extract the region of interest (ROI) around the detected face
-        face_roi = frame[y:y + h, x:x + w]
+# Save the trained model
+model.save('my_model.keras')
 
-        # Convert the face ROI to grayscale for eye detection
-        face_gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+# Load the saved model later
+loaded_model = tf.keras.models.load_model('my_model.keras')
 
-        # Detect eyes within the face ROI
-        eyes = eye_cascade.detectMultiScale(face_gray)
-
-        # Print the detected face coordinates
-        print(f"Detected Face: {x}, {y}, {w}, {h}")
-
-        # Detect eyes within the face ROI
-        eyes = eye_cascade.detectMultiScale(face_gray)
-
-        # Auto-zoom based on detected eyes or consider closed eyes if no eyes are detected
-        if len(eyes) > 0:
-            for (ex, ey, ew, eh) in eyes:
-                # Define the region of interest (ROI) around the detected eyes
-                eye_roi = face_roi[ey:ey + eh, ex:ex + ew]
-
-                # Preprocess the eye ROI for prediction
-                preprocessed_eye_roi = preprocess_image(eye_roi)
-
-                # Make a prediction
-                prediction = model.predict(preprocessed_eye_roi)
-
-                # Assuming a threshold of 0.6 for binary classification
-                if prediction[0][0] > 0.5:
-                    cv2.putText(frame, 'Open Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-                    mean_close_eye_count.clear()  # Reset the mean close eye count
-                else:
-                    cv2.putText(frame, 'Closed Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
-                                cv2.LINE_AA)
-                    mean_close_eye_count.append(1)  # Increment the mean close eye count
-
-                    # Check if the mean close eye count exceeds the threshold
-                    if len(mean_close_eye_count) >= mean_close_eye_count_threshold:
-                        # Play the alert sound or trigger your alert mechanism
-                        cv2.putText(frame, 'ALERT: Drowsiness detected!', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
-                                    cv2.LINE_AA)
-                        # Play the alert sound in a separate thread
-                        threading.Thread(target=play_alert_sound).start()
-                        print("ALERT: Drowsiness detected!")
-                        # You can add your alert sound or any other alert mechanism here
-
-        else:
-            # No eyes detected within the face ROI, consider as closed eyes
-            cv2.putText(frame, 'Closed Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
-            mean_close_eye_count.append(1)  # Increment the mean close eye count
-
-            # Check if the mean close eye count exceeds the threshold
-            if len(mean_close_eye_count) >= mean_close_eye_count_threshold:
-                # Play the alert sound or trigger your alert mechanism
-                # Play the alert sound in a separate thread
-                threading.Thread(target=play_alert_sound).start()
-                print("ALERT: Drowsiness detected!")
-                # You can add your alert sound or any other alert mechanism here
-
-    # Display the result
-    cv2.imshow('Drowsiness Detection', frame)
-
-    # Break the loop on 'q' key press
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# Release the camera
-cap.release()
-cv2.destroyAllWindows()
+# Now you can use loaded_model for making predictions or further training
