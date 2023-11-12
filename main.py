@@ -5,6 +5,8 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from collections import deque
 from playsound import playsound
+import threading
+
 # Load the trained model
 model = tf.keras.models.load_model('my_model.keras')
 
@@ -20,14 +22,22 @@ def preprocess_image(img):
     img = img / 255.0
     return np.expand_dims(img, axis=0)
 
+def play_alert_sound():
+    playsound("sounds/beep-warning-6387.mp3")
+
 # Access the camera
 cap = cv2.VideoCapture(0)  # Use 0 for default webcam, change the index if you have multiple cameras
+# cap.set(3, 640)  # Width
+# cap.set(4, 480)  # Height
 # test the fps of the camera feedback
-# fps = cap.get(cv2.CAP_PROP_FPS)
-# print("Frames per second:", fps)
+fps = cap.get(cv2.CAP_PROP_FPS)
+print("Frames per second:", fps)
+
+
+
 
 # Parameters for mean close eye count
-mean_close_eye_count_threshold = 20  # Adjust as needed
+mean_close_eye_count_threshold = 10  # Adjust as needed
 mean_close_eye_count = deque(maxlen=mean_close_eye_count_threshold)
 
 while True:
@@ -38,7 +48,7 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Detect faces
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=4)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4)
 
 
 
@@ -71,12 +81,12 @@ while True:
                 prediction = model.predict(preprocessed_eye_roi)
 
                 # Assuming a threshold of 0.6 for binary classification
-                if prediction[0][0] > 0.6:
+                if prediction[0][0] > 0.5:
                     cv2.putText(frame, 'Open Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
                     mean_close_eye_count.clear()  # Reset the mean close eye count
                 else:
-                    # cv2.putText(frame, 'Closed Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
-                    #             cv2.LINE_AA)
+                    cv2.putText(frame, 'Closed Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
+                                cv2.LINE_AA)
                     mean_close_eye_count.append(1)  # Increment the mean close eye count
 
                     # Check if the mean close eye count exceeds the threshold
@@ -84,19 +94,21 @@ while True:
                         # Play the alert sound or trigger your alert mechanism
                         cv2.putText(frame, 'ALERT: Drowsiness detected!', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,
                                     cv2.LINE_AA)
-                        playsound("sounds/beep-warning-6387.mp3")
+                        # Play the alert sound in a separate thread
+                        threading.Thread(target=play_alert_sound).start()
                         print("ALERT: Drowsiness detected!")
                         # You can add your alert sound or any other alert mechanism here
 
         else:
             # No eyes detected within the face ROI, consider as closed eyes
-            # cv2.putText(frame, 'Closed Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, 'Closed Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
             mean_close_eye_count.append(1)  # Increment the mean close eye count
 
             # Check if the mean close eye count exceeds the threshold
             if len(mean_close_eye_count) >= mean_close_eye_count_threshold:
                 # Play the alert sound or trigger your alert mechanism
-                playsound("sounds/beep-warning-6387.mp3")
+                # Play the alert sound in a separate thread
+                threading.Thread(target=play_alert_sound).start()
                 print("ALERT: Drowsiness detected!")
                 # You can add your alert sound or any other alert mechanism here
 
