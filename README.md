@@ -30,7 +30,7 @@ This Python script implements a drowsiness detection system using a machine lear
    - Run the script to train the model:
 
      ```bash
-     python train_model.py
+     python model.py
      ```
 
 2. **Real-time Drowsiness Detection:**
@@ -38,7 +38,7 @@ This Python script implements a drowsiness detection system using a machine lear
    - After training the model, use the trained model for real-time drowsiness detection:
 
      ```bash
-     python drowsiness_detection.py
+     python main.py
      ```
 
    - The script accesses the webcam, captures frames, and detects the state of the eyes in real-time.
