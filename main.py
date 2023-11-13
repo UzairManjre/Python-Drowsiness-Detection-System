@@ -48,7 +48,7 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Detect faces
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=4)
 
 
 
@@ -80,8 +80,8 @@ while True:
                 # Make a prediction
                 prediction = model.predict(preprocessed_eye_roi)
 
-                # Assuming a threshold of 0.6 for binary classification
-                if prediction[0][0] > 0.5:
+                # Assuming a threshold of 0.4 for binary classification
+                if prediction[0][0] > 0.4:
                     cv2.putText(frame, 'Open Eyes', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
                     mean_close_eye_count.clear()  # Reset the mean close eye count
                 else:
